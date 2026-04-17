@@ -1,0 +1,42 @@
+{
+    "Name": "Headphone Battery Level",
+    "Version": "0.1.0.0",
+    "Author": "joshmiller83",
+    "Actions": [
+        {
+            "Name": "Headphone Battery",
+            "UUID": "com.joshmiller83.headphone-battery-level.battery",
+            "Icon": "imgs/actions/battery/icon",
+            "Tooltip": "Displays AirPods or Bluetooth headphone battery level.",
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "imgs/actions/battery/key",
+                    "TitleAlignment": "middle"
+                }
+            ]
+        }
+    ],
+    "Category": "Headphone Battery Level",
+    "CategoryIcon": "imgs/plugin/category-icon",
+    "CodePath": "bin/plugin.js",
+    "Description": "Displays Bluetooth headphone battery level on a Stream Deck key.",
+    "Icon": "imgs/plugin/marketplace",
+    "SDKVersion": 3,
+    "Software": {
+        "MinimumVersion": "6.9"
+    },
+    "OS": [
+        {
+            "Platform": "mac",
+            "MinimumVersion": "12"
+        }
+    ],
+    "Nodejs": {
+        "Version": "20",
+        "Debug": "enabled"
+    },
+    "UUID": "com.joshmiller83.headphone-battery-level"
+}

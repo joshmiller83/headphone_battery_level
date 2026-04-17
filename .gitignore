@@ -4,6 +4,8 @@ node_modules/
 # Build output
 dist/
 *.sdPlugin/bin/
+*.sdPlugin/node_modules/
+*.sdPlugin/logs/
 
 # Logs
 *.log
