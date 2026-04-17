@@ -34,10 +34,17 @@ export class HeadphoneBattery extends SingletonAction<HeadphoneBatterySettings> 
         const targetName = ev.payload.settings.deviceName ?? "AirPods Max";
         try {
             const result = await readBatteryLevel(targetName);
-            await ev.action.setImage(svgToDataUrl(renderBatteryImage(result?.level ?? null)));
+            const state = typeof result === "object" ? result.level : result;
+            await ev.action.setImage(svgToDataUrl(renderBatteryImage(state)));
+            if (result === "permission_denied") {
+                streamDeck.logger.warn(
+                    "Bluetooth permission denied. Grant access to Stream Deck in " +
+                    "System Settings → Privacy & Security → Bluetooth, then press the key to refresh."
+                );
+            }
         } catch (err) {
             streamDeck.logger.error("Battery update failed:", err);
-            await ev.action.setImage(svgToDataUrl(renderBatteryImage(null)));
+            await ev.action.setImage(svgToDataUrl(renderBatteryImage("not_found")));
         }
     }
 }

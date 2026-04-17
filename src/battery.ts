@@ -8,6 +8,8 @@ export interface BatteryResult {
     deviceName: string;
 }
 
+export type BatteryError = "not_found" | "permission_denied";
+
 const __dir = dirname(fileURLToPath(import.meta.url));
 
 // Locate the compiled helper: same dir as plugin.js when built,
@@ -19,26 +21,30 @@ const helperPath = [
 
 /**
  * Read battery level from a connected Bluetooth headphone via the IOBluetooth private API.
- * Uses a compiled Objective-C helper that calls batteryPercentCombined/batteryPercentSingle
- * on IOBluetoothDevice — the same source macOS uses for its own Bluetooth menu bar indicator.
  *
- * @param targetName  Partial device name to match (case-insensitive), e.g. "AirPods Max"
- * @returns Battery percentage (1–100) or null if device not found / not connected
+ * Returns the battery result, or a BatteryError string:
+ *   "not_found"        – device not connected / not found
+ *   "permission_denied" – Stream Deck needs Bluetooth access in
+ *                         System Settings → Privacy & Security → Bluetooth
  */
 export function readBatteryLevel(
     targetName: string = "AirPods Max"
-): Promise<BatteryResult | null> {
+): Promise<BatteryResult | BatteryError> {
     return new Promise((resolve) => {
         execFile(helperPath, [targetName], { timeout: 5_000 }, (err, stdout) => {
-            if (err) {
-                resolve(null);
-                return;
+            if (!err) {
+                const level = parseInt(stdout.trim(), 10);
+                if (!isNaN(level) && level > 0) {
+                    resolve({ level, deviceName: targetName });
+                    return;
+                }
             }
-            const level = parseInt(stdout.trim(), 10);
-            if (isNaN(level) || level < 0) {
-                resolve(null);
+            // Exit code 2 = Bluetooth TCC permission denied
+            const exitCode = (err as NodeJS.ErrnoException & { code?: number })?.code;
+            if (exitCode === 2) {
+                resolve("permission_denied");
             } else {
-                resolve({ level, deviceName: targetName });
+                resolve("not_found");
             }
         });
     });
