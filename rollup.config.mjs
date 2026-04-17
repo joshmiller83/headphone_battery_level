@@ -4,6 +4,7 @@ import terser from "@rollup/plugin-terser";
 import typescript from "@rollup/plugin-typescript";
 import path from "node:path";
 import url from "node:url";
+import { execSync } from "node:child_process";
 
 const isWatching = !!process.env.ROLLUP_WATCH;
 const sdPlugin = "com.joshmiller83.headphone-battery-level.sdPlugin";
@@ -20,8 +21,6 @@ const config = {
 			return url.pathToFileURL(path.resolve(path.dirname(sourcemapPath), relativeSourcePath)).href;
 		}
 	},
-	// noble's native .node binary cannot be bundled — keep it external and copy at build time
-	external: ["@stoprocent/noble"],
 	plugins: [
 		{
 			name: "watch-externals",
@@ -46,15 +45,17 @@ const config = {
 			}
 		},
 		{
-			name: "copy-noble-deps",
+			name: "compile-native-helper",
 			closeBundle() {
-				import("node:child_process").then(({ execSync }) => {
-					try {
-						execSync(`mkdir -p ${sdPlugin}/node_modules && cp -rL node_modules/@stoprocent ${sdPlugin}/node_modules/@stoprocent`, { stdio: "inherit" });
-					} catch (e) {
-						console.warn("Warning: could not copy @stoprocent/noble to sdPlugin:", e.message);
-					}
-				});
+				try {
+					execSync(
+						`clang -framework Foundation -framework IOBluetooth ` +
+						`-o ${sdPlugin}/bin/airpods_battery native/airpods_battery.m`,
+						{ stdio: "inherit" }
+					);
+				} catch (e) {
+					console.warn("Warning: could not compile native battery helper:", e.message);
+				}
 			}
 		}
 	]

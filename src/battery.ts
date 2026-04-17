@@ -1,117 +1,45 @@
-import { withBindings } from "@stoprocent/noble";
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { join, dirname } from "node:path";
 
 export interface BatteryResult {
     level: number;
     deviceName: string;
-    address: string;
 }
+
+const __dir = dirname(fileURLToPath(import.meta.url));
+
+// Locate the compiled helper: same dir as plugin.js when built,
+// or in sdPlugin/bin/ when running from src/ via tsx
+const helperPath = [
+    join(__dir, "airpods_battery"),
+    join(__dir, "..", "com.joshmiller83.headphone-battery-level.sdPlugin", "bin", "airpods_battery"),
+].find(existsSync) ?? join(__dir, "airpods_battery");
 
 /**
- * Read battery level from a BLE device via GATT Battery Service (0x180F / characteristic 0x2A19).
+ * Read battery level from a connected Bluetooth headphone via the IOBluetooth private API.
+ * Uses a compiled Objective-C helper that calls batteryPercentCombined/batteryPercentSingle
+ * on IOBluetoothDevice — the same source macOS uses for its own Bluetooth menu bar indicator.
  *
- * AirPods Max (and most modern BT headphones) expose battery this way. Standard macOS ioreg/
- * system_profiler do NOT expose AirPods battery — BLE GATT is the only reliable path.
- *
- * Strategy:
- *  1. If a cached address is provided, attempt direct connect first (fast path, skips scan).
- *  2. Fall back to scanning for the Battery Service and matching by device name.
+ * @param targetName  Partial device name to match (case-insensitive), e.g. "AirPods Max"
+ * @returns Battery percentage (1–100) or null if device not found / not connected
  */
-export async function readBatteryLevel(
-    targetName: string = "AirPods Max",
-    cachedAddress?: string,
-    timeoutMs: number = 12_000
+export function readBatteryLevel(
+    targetName: string = "AirPods Max"
 ): Promise<BatteryResult | null> {
-    const noble = withBindings("mac");
-
-    try {
-        await noble.waitForPoweredOnAsync(5_000);
-    } catch {
-        return null;
-    }
-
-    // Fast path: reconnect using a previously discovered address
-    if (cachedAddress) {
-        const result = await tryDirectConnect(noble, cachedAddress, targetName);
-        if (result) return result;
-    }
-
-    // Scan path: discover via Battery Service advertisement
-    return await scanAndConnect(noble, targetName, timeoutMs);
-}
-
-async function tryDirectConnect(
-    noble: ReturnType<typeof withBindings>,
-    address: string,
-    deviceName: string
-): Promise<BatteryResult | null> {
-    try {
-        const peripheral = await noble.connectAsync(address);
-        return await readFromPeripheral(peripheral, deviceName, address);
-    } catch {
-        return null;
-    }
-}
-
-async function scanAndConnect(
-    noble: ReturnType<typeof withBindings>,
-    targetName: string,
-    timeoutMs: number
-): Promise<BatteryResult | null> {
-    return new Promise(async (resolve) => {
-        const timeout = setTimeout(async () => {
-            await noble.stopScanningAsync().catch(() => {});
-            resolve(null);
-        }, timeoutMs);
-
-        noble.on("discover", async (peripheral) => {
-            const name = peripheral.advertisement?.localName ?? "";
-            if (!name.toLowerCase().includes(targetName.toLowerCase())) return;
-
-            clearTimeout(timeout);
-            await noble.stopScanningAsync().catch(() => {});
-
-            try {
-                await peripheral.connectAsync();
-                const result = await readFromPeripheral(peripheral, name, peripheral.address);
-                resolve(result);
-            } catch {
+    return new Promise((resolve) => {
+        execFile(helperPath, [targetName], { timeout: 5_000 }, (err, stdout) => {
+            if (err) {
                 resolve(null);
+                return;
+            }
+            const level = parseInt(stdout.trim(), 10);
+            if (isNaN(level) || level < 0) {
+                resolve(null);
+            } else {
+                resolve({ level, deviceName: targetName });
             }
         });
-
-        try {
-            // Scan without UUID filter first — already-connected devices may not advertise 0x180F
-            await noble.startScanningAsync([], false);
-        } catch {
-            clearTimeout(timeout);
-            resolve(null);
-        }
     });
-}
-
-async function readFromPeripheral(
-    peripheral: Awaited<ReturnType<ReturnType<typeof withBindings>["connectAsync"]>>,
-    deviceName: string,
-    address: string
-): Promise<BatteryResult | null> {
-    try {
-        const { characteristics } = await peripheral.discoverSomeServicesAndCharacteristicsAsync(
-            ["180f"],
-            ["2a19"]
-        );
-
-        if (characteristics.length === 0) {
-            await peripheral.disconnectAsync().catch(() => {});
-            return null;
-        }
-
-        const data = await characteristics[0].readAsync();
-        const level = data.readUInt8(0);
-        await peripheral.disconnectAsync().catch(() => {});
-
-        return { level, deviceName, address };
-    } catch {
-        await peripheral.disconnectAsync().catch(() => {});
-        return null;
-    }
 }

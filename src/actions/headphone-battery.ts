@@ -6,7 +6,6 @@ const POLL_INTERVAL_MS = 30_000;
 
 type HeadphoneBatterySettings = {
     deviceName?: string;
-    cachedAddress?: string;
 };
 
 @action({ UUID: "com.joshmiller83.headphone-battery-level.battery" })
@@ -32,17 +31,9 @@ export class HeadphoneBattery extends SingletonAction<HeadphoneBatterySettings> 
     private async _update(
         ev: WillAppearEvent<HeadphoneBatterySettings> | KeyDownEvent<HeadphoneBatterySettings>
     ): Promise<void> {
-        const { settings } = ev.payload;
-        const targetName = settings.deviceName ?? "AirPods Max";
-
+        const targetName = ev.payload.settings.deviceName ?? "AirPods Max";
         try {
-            const result = await readBatteryLevel(targetName, settings.cachedAddress);
-
-            // Cache address so subsequent polls skip BLE scan
-            if (result && result.address !== settings.cachedAddress) {
-                await ev.action.setSettings({ ...settings, cachedAddress: result.address });
-            }
-
+            const result = await readBatteryLevel(targetName);
             await ev.action.setImage(svgToDataUrl(renderBatteryImage(result?.level ?? null)));
         } catch (err) {
             streamDeck.logger.error("Battery update failed:", err);
