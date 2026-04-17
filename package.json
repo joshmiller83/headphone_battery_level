@@ -1,7 +1,9 @@
 {
     "scripts": {
         "build": "rollup -c",
-        "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.joshmiller83.headphone-battery-level\""
+        "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.joshmiller83.headphone-battery-level\"",
+        "preview": "tsx scripts/preview-render.ts",
+        "test:battery": "tsx scripts/test-battery.ts"
     },
     "type": "module",
     "devDependencies": {
@@ -15,6 +17,7 @@
         "rollup": "^4.0.2",
         "rollup-plugin-natives": "^0.7.8",
         "tslib": "^2.6.2",
+        "tsx": "^4.21.0",
         "typescript": "^5.2.2"
     },
     "dependencies": {
